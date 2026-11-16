@@ -1,0 +1,18 @@
+Enhanced MCP Server (refactored)
+
+This project is a modular refactor of the code built in the IBM Skills Network
+guided lab "Build an Enhanced MCP Server", part of the IBM RAG and Agentic AI
+Professional Certificate (Coursera).
+
+Original lab and code authors (IBM):
+  - Abdul Fatir, Data Scientist @ IBM
+  - Joshua Zhou, Data Scientist @ IBM
+  - Joseph Santarcangelo, Data Scientist @ IBM
+
+Original repository: https://github.com/joshuazhou744/enhanced-mcp-server
+The lab content is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Modifications in this version: the single-file server.py and client.py were
+split into the mcp_server and mcp_client packages, configuration was moved to
+environment variables, a test suite was added, and several small fixes were
+made (see the "Changes from the original lab" section of README.md).
