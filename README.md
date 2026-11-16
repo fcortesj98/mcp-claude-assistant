@@ -2,18 +2,6 @@
 
 A Model Context Protocol (MCP) server and command-line client that let **Claude** read, write and delete files and run guided workflows (code review and documentation generation). The project uses all three MCP primitives (**tools**, **resources** and **prompts**) and the advanced MCP Context features: **logging**, **progress reporting** and **user elicitation**.
 
-> ## 📌 Credits and origin
->
-> **The original code comes from the IBM Skills Network guided lab _"Build an Enhanced MCP Server"_, part of the [IBM RAG and Agentic AI Professional Certificate](https://www.coursera.org/specializations/ibm-rag-and-agentic-ai) on Coursera.**
->
-> - **Original authors (IBM):** Abdul Fatir, Joshua Zhou and Joseph Santarcangelo (Data Scientists @ IBM)
-> - **Original repository:** <https://github.com/joshuazhou744/enhanced-mcp-server> (the lab starts from its `start` branch)
-> - **License:** the lab content is licensed under the [Apache License 2.0](LICENSE). See [`NOTICE`](NOTICE).
->
-> This repository is my completed version of that lab, **refactored into a modular package layout** with configuration, tests and documentation added. The core design and behavior belong to the original authors. The structural changes are listed in [Changes from the original lab](#changes-from-the-original-lab).
-
----
-
 ## Table of contents
 
 1. [What it does](#what-it-does)
@@ -314,85 +302,6 @@ Query: Now delete it
 Query: q
 ```
 
-Conversation mode keeps the history until you exit, so follow-ups like "now delete it" work.
-
-### Things to try
-
-- Ask the agent to write a small script, then use **Review Code** on it.
-- Ask the agent to write outside the folder (`../x.txt`). The sandbox rejects it, and Claude receives the error and explains it.
-- Watch the `Progress:` lines (from `ctx.report_progress`) and the `Server log:` lines (from `ctx.info`).
-
-## Using the pieces in your own code
-
-**Drive the server from Python** (in-memory, no subprocess):
-
-```python
-import asyncio, json
-from mcp_client import MCPClient, ClaudeAgent
-from mcp_server import create_server
-
-async def main():
-    async with MCPClient() as mcp:
-        await mcp.connect(create_server())          # or: await mcp.connect("server.py")
-        listing = await mcp.read_resource_json("dir://.")
-        print([item["name"] for item in listing["items"]])
-
-        agent = ClaudeAgent(mcp)                    # needs ANTHROPIC_API_KEY
-        print(await agent.process_query("Create hello.txt containing 'hi'"))
-
-asyncio.run(main())
-```
-
-**Use the server from another MCP host** (for example, Claude Desktop's `claude_desktop_config.json`). Use absolute paths:
-
-```json
-{
-  "mcpServers": {
-    "file-ops": {
-      "command": "/abs/path/enhanced-mcp-server/.venv/bin/python",
-      "args": ["/abs/path/enhanced-mcp-server/server.py"],
-      "env": { "MCP_BASE_DIR": "/abs/path/to/the/folder/to/expose" }
-    }
-  }
-}
-```
-
-## Extending the project
-
-Each primitive has a registry, so extending is "write a function, add it to a list".
-
-**Add a tool.** For example, add a `rename_file` tool in `mcp_server/tools/file_tools.py`:
-
-```python
-async def rename_file(src: str, dst: str, ctx: Context) -> str:
-    """Rename a file inside the project directory."""
-    get_path(src).rename(get_path(dst))
-    await ctx.info(f"Renamed {src} -> {dst}")
-    return f"Renamed {src} -> {dst}"
-
-TOOLS = [write_file, delete_file, rename_file]
-```
-
-Claude sees it automatically, because the agent fetches the tool list for every query. For a new *group* of tools, create `mcp_server/tools/search_tools.py` with its own `TOOLS` list and add the module to `_MODULES` in `mcp_server/tools/__init__.py`.
-
-**Add a resource.** Add `(uri, function)` to a module's `RESOURCES` list:
-
-```python
-async def file_stats(file_name: str) -> dict:
-    path = get_path(file_name)
-    return {"lines": len(path.read_text().splitlines())}
-
-RESOURCES = [(FILE_URI_TEMPLATE, read_file_resource), ("stats:///{file_name}", file_stats)]
-```
-
-**Add a prompt.** Create `mcp_server/prompts/unit_tests.py` with an `async def unit_tests(file_path: str, ctx: Context) -> str` function and `PROMPTS = [unit_tests]`, then add the module to `_MODULES` in `mcp_server/prompts/__init__.py`. Reuse `read_source_file()` to load the code.
-
-**Add a menu option.** Add one line to `build_menu()` in `mcp_client/app.py`:
-
-```python
-MenuItem("6", "Write Unit Tests", lambda: run_prompt(mcp, agent, "unit_tests")),
-```
-
 ## Testing
 
 ```bash
@@ -404,32 +313,6 @@ The suite (21 tests) needs **no API key**:
 
 - `tests/test_server.py` covers every tool, resource and prompt through an in-memory FastMCP client, plus progress reporting, elicitation (accept and decline) and sandbox escapes.
 - `tests/test_client.py` runs the agent loop against a scripted fake Claude (tool calls, tool errors, round limit, conversation history), tests the features and the menu, and includes a real **STDIO end-to-end** run of `python client.py server.py`.
-
-## Changes from the original lab
-
-The behavior, prompts and menu match the lab. These are the structural changes and fixes:
-
-| Area | Original | Now |
-|---|---|---|
-| Layout | Two files (`server.py`, `client.py`) | `mcp_server` / `mcp_client` packages, one module per capability, registries per primitive; root scripts kept as thin entry points |
-| Path safety | `get_path` resolved against the process CWD and returned a *relative* path | Resolves against `BASE_DIR`, returns an absolute path, raises `PathOutsideBaseDirError` on escape |
-| `write_file` | `time.sleep()` blocked the event loop | `await asyncio.sleep()` |
-| Server startup message | `print()` to stdout (shares the STDIO protocol channel) | Printed to stderr |
-| Elicitation | A declined or cancelled elicitation read `result.data` (which doesn't exist on that result), so the client got a generic "Error rendering prompt" | Checks `result.action` first and returns a clear message |
-| Read File | A missing file showed `Error reading file: 'file_content'` | Shows the server's actual error message |
-| Claude client | Synchronous `Anthropic` inside async code; no loop limit | `AsyncAnthropic`, created lazily (resources work without a key), `CLAUDE_MAX_TOOL_ROUNDS` cap, clear message when the key is missing |
-| Conversation | Each query started from scratch | History kept for the session (rolled back on errors) |
-| Config | Hard-coded constants | Environment variables / `.env` |
-| Tests | None | 21 pytest tests including STDIO end-to-end |
-
-## Troubleshooting
-
-- **`ANTHROPIC_API_KEY is not set`**: create `.env` from `.env.example`. Options 3 and 4 work without it.
-- **`Server script must be a .py, .js, or .ts file`**: run `python client.py server.py` from the project root.
-- **Model not found / 404 from the API**: set `CLAUDE_MODEL` in `.env` to a model your key can access.
-- **Changes to the server don't show up**: restart the client. It launches a fresh server process on start.
-- **`ModuleNotFoundError: mcp_server`**: run the commands from the project root with the virtual environment active.
-- **Dependency conflicts**: keep the pinned versions in `requirements.txt`, including `pydantic<2.14` as the lab specifies.
 
 ## License
 
