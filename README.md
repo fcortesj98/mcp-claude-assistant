@@ -2,24 +2,6 @@
 
 A Model Context Protocol (MCP) server and command-line client that let **Claude** read, write and delete files and run guided workflows (code review and documentation generation). The project uses all three MCP primitives (**tools**, **resources** and **prompts**) and the advanced MCP Context features: **logging**, **progress reporting** and **user elicitation**.
 
-## Table of contents
-
-1. [What it does](#what-it-does)
-2. [MCP in 60 seconds](#mcp-in-60-seconds)
-3. [Architecture](#architecture)
-4. [Project structure](#project-structure)
-5. [Components](#components)
-6. [Setup](#setup)
-7. [Configuration](#configuration)
-8. [How to use it](#how-to-use-it)
-9. [Usage examples](#usage-examples)
-10. [Using the pieces in your own code](#using-the-pieces-in-your-own-code)
-11. [Extending the project](#extending-the-project)
-12. [Testing](#testing)
-13. [Changes from the original lab](#changes-from-the-original-lab)
-14. [Troubleshooting](#troubleshooting)
-15. [License](#license)
-
 ---
 
 ## What it does
